@@ -1,151 +1,439 @@
 import re
 import random
-import spacy
-import pyinflect
-from textblob import TextBlob
-import nltk
-from nltk.corpus import wordnet
+import statistics
+from collections import Counter
 
-# Ensure nltk data is available
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet')
-    nltk.download('punkt')
-    nltk.download('averaged_perceptron_tagger')
+import nltk
+import spacy
+from nltk.corpus import wordnet
+from textblob import TextBlob
 
 nlp = spacy.load("en_core_web_sm")
 
+
 class Humanizer:
+
     def __init__(self):
-        # Common transition words
-        self.transitions = [
-            "Honestly,", "To be fair,", "Actually,", "In fact,", "Basically,", 
-            "Plus,", "Also,", "By the way,", "Now,"
+
+        self.casual_transitions = [
+            "Honestly,",
+            "To be fair,",
+            "At the same time,",
+            "In many ways,",
+            "That said,",
+            "Still,",
+            "At this point,",
+            "At the end of the day,"
         ]
-        
+
+        self.academic_fillers = [
+            "in many cases",
+            "to some extent",
+            "in practice",
+            "based on the findings",
+            "from this perspective",
+            "in most situations"
+        ]
+
         self.contractions = {
-            "cannot": "can't",
             "do not": "don't",
             "does not": "doesn't",
+            "cannot": "can't",
             "will not": "won't",
-            "are not": "aren't",
             "is not": "isn't",
+            "are not": "aren't",
             "have not": "haven't",
             "has not": "hasn't",
             "would not": "wouldn't",
             "should not": "shouldn't",
             "could not": "couldn't",
-            "I am": "I'm",
-            "you are": "you're",
-            "we are": "we're",
-            "they are": "they're",
-            "he is": "he's",
-            "she is": "she's",
-            "it is": "it's",
-            "I will": "I'll",
-            "you will": "you'll",
-            "we will": "we'll",
-            "they will": "they'll",
-            "I have": "I've",
-            "you have": "you've",
-            "we have": "we've",
-            "they have": "they've",
-            "I would": "I'd",
-            "you would": "you'd",
-            "he would": "he'd",
-            "she would": "she'd",
-            "we would": "we'd",
-            "they would": "they'd"
         }
 
-    def process(self, text: str) -> str:
+        self.ai_phrases = [
+            "it is important to note",
+            "in conclusion",
+            "overall",
+            "moreover",
+            "furthermore",
+            "delve into",
+            "plays a crucial role",
+            "underscores the importance"
+        ]
+
+    # ---------------------------------------------------
+    # MAIN PROCESS
+    # ---------------------------------------------------
+
+    def process(self, text):
+
         if not text.strip():
             return text
-            
-        paragraphs = text.split('\n\n')
-        humanized_paragraphs = []
-        
-        for p in paragraphs:
-            if not p.strip():
-                continue
-                
-            # 1. Apply contractions
-            p = self._apply_contractions(p)
-            
-            # 2. Process at sentence level
-            doc = nlp(p)
-            sentences = [sent.text.strip() for sent in doc.sents]
-            
-            processed_sentences = []
-            for i, sent in enumerate(sentences):
-                # Apply synonym substitution sparingly (10% chance per word to avoid nonsense)
-                sent = self._substitute_synonyms(sent)
-                
-                # Randomly inject transition words at the start of some sentences
-                if i > 0 and random.random() < 0.15:
-                    sent = self._inject_transition(sent)
-                    
-                # Alter punctuation slightly
-                sent = self._vary_punctuation(sent)
-                
-                processed_sentences.append(sent)
-            
-            # 3. Burstiness variation (combine or split sentences theoretically, 
-            # here we simply join with varied spacing to mimic human typing)
-            humanized_p = " ".join(processed_sentences)
-            
-            # 4. Subtle human inconsistencies (e.g. double spaces, missing comma)
-            humanized_p = self._add_inconsistencies(humanized_p)
-            
-            humanized_paragraphs.append(humanized_p)
-            
-        return "\n\n".join(humanized_paragraphs)
 
-    def _apply_contractions(self, text: str) -> str:
+        paragraphs = text.split("\n\n")
+
+        processed_paragraphs = []
+
+        for paragraph in paragraphs:
+
+            if not paragraph.strip():
+                continue
+
+            paragraph = self._remove_ai_phrases(paragraph)
+
+            paragraph = self._apply_contractions(
+                paragraph
+            )
+
+            doc = nlp(paragraph)
+
+            sentences = [
+                sent.text.strip()
+                for sent in doc.sents
+            ]
+
+            transformed = []
+
+            for i, sentence in enumerate(sentences):
+
+                sentence = self._humanize_sentence(
+                    sentence
+                )
+
+                sentence = self._vary_sentence_length(
+                    sentence
+                )
+
+                if random.random() < 0.12:
+                    sentence = self._inject_transition(
+                        sentence
+                    )
+
+                transformed.append(sentence)
+
+            paragraph = self._rebuild_paragraph(
+                transformed
+            )
+
+            paragraph = self._inject_human_rhythm(
+                paragraph
+            )
+
+            processed_paragraphs.append(
+                paragraph
+            )
+
+        return "\n\n".join(
+            processed_paragraphs
+        )
+
+    # ---------------------------------------------------
+    # REMOVE AI PHRASES
+    # ---------------------------------------------------
+
+    def _remove_ai_phrases(self, text):
+
+        for phrase in self.ai_phrases:
+
+            pattern = re.compile(
+                re.escape(phrase),
+                re.IGNORECASE
+            )
+
+            if random.random() < 0.8:
+                text = pattern.sub("", text)
+
+        return re.sub(r"\s+", " ", text)
+
+    # ---------------------------------------------------
+    # CONTRACTIONS
+    # ---------------------------------------------------
+
+    def _apply_contractions(self, text):
+
         for full, contracted in self.contractions.items():
-            # Apply with 70% probability to keep it natural
-            if random.random() < 0.7:
-                text = re.sub(rf'\b{full}\b', contracted, text, flags=re.IGNORECASE)
+
+            if random.random() < 0.65:
+
+                text = re.sub(
+                    rf"\b{full}\b",
+                    contracted,
+                    text,
+                    flags=re.IGNORECASE
+                )
+
         return text
 
-    def _substitute_synonyms(self, text: str) -> str:
-        words = text.split()
-        new_words = []
-        for word in words:
-            clean_word = re.sub(r'[^\w]', '', word)
-            if len(clean_word) > 4 and random.random() < 0.05: # Only 5% chance to substitute
-                synsets = wordnet.synsets(clean_word)
-                if synsets:
-                    lemmas = synsets[0].lemmas()
-                    if lemmas:
-                        synonym = random.choice(lemmas).name().replace('_', ' ')
-                        # Preserve capitalization
-                        if word[0].isupper():
-                            synonym = synonym.capitalize()
-                        # Keep original punctuation
-                        new_word = word.replace(clean_word, synonym)
-                        new_words.append(new_word)
-                        continue
-            new_words.append(word)
-        return " ".join(new_words)
+    # ---------------------------------------------------
+    # MAIN SENTENCE HUMANIZATION
+    # ---------------------------------------------------
 
-    def _inject_transition(self, text: str) -> str:
-        transition = random.choice(self.transitions)
-        if text and text[0].isupper():
-            return f"{transition} {text[0].lower()}{text[1:]}"
+    def _humanize_sentence(self, sentence):
+
+        sentence = self._smart_synonyms(
+            sentence
+        )
+
+        sentence = self._reduce_formality(
+            sentence
+        )
+
+        sentence = self._inject_fillers(
+            sentence
+        )
+
+        sentence = self._vary_punctuation(
+            sentence
+        )
+
+        return sentence
+
+    # ---------------------------------------------------
+    # SMART SYNONYM ENGINE
+    # ---------------------------------------------------
+
+    def _smart_synonyms(self, text):
+
+        doc = nlp(text)
+
+        new_words = []
+
+        for token in doc:
+
+            word = token.text
+
+            if (
+                token.pos_ in ["ADJ", "VERB", "ADV"]
+                and len(word) > 5
+                and random.random() < 0.04
+            ):
+
+                synonym = self._get_contextual_synonym(
+                    token
+                )
+
+                if synonym:
+                    word = synonym
+
+            new_words.append(word)
+
+        return self._reconstruct(
+            new_words
+        )
+
+    # ---------------------------------------------------
+    # CONTEXTUAL SYNONYMS
+    # ---------------------------------------------------
+
+    def _get_contextual_synonym(self, token):
+
+        synsets = wordnet.synsets(
+            token.text
+        )
+
+        candidates = []
+
+        for syn in synsets:
+
+            for lemma in syn.lemmas():
+
+                candidate = lemma.name().replace(
+                    "_", " "
+                )
+
+                if (
+                    candidate.lower()
+                    != token.text.lower()
+                    and len(candidate.split()) == 1
+                    and candidate.isalpha()
+                ):
+                    candidates.append(candidate)
+
+        if not candidates:
+            return None
+
+        synonym = random.choice(candidates)
+
+        if token.text[0].isupper():
+            synonym = synonym.capitalize()
+
+        return synonym
+
+    # ---------------------------------------------------
+    # REDUCE AI FORMALITY
+    # ---------------------------------------------------
+
+    def _reduce_formality(self, text):
+
+        replacements = {
+
+            "utilize": "use",
+            "numerous": "many",
+            "individuals": "people",
+            "assistance": "help",
+            "demonstrate": "show",
+            "therefore": "so",
+            "however": "but",
+        }
+
+        for formal, natural in replacements.items():
+
+            if random.random() < 0.7:
+
+                text = re.sub(
+                    rf"\b{formal}\b",
+                    natural,
+                    text,
+                    flags=re.IGNORECASE
+                )
+
+        return text
+
+    # ---------------------------------------------------
+    # HUMAN FILLERS
+    # ---------------------------------------------------
+
+    def _inject_fillers(self, text):
+
+        if random.random() < 0.08:
+
+            filler = random.choice(
+                self.academic_fillers
+            )
+
+            comma_positions = [
+                m.start()
+                for m in re.finditer(",", text)
+            ]
+
+            if comma_positions:
+
+                pos = random.choice(
+                    comma_positions
+                )
+
+                text = (
+                    text[:pos]
+                    + f", {filler},"
+                    + text[pos:]
+                )
+
+        return text
+
+    # ---------------------------------------------------
+    # SENTENCE LENGTH VARIATION
+    # ---------------------------------------------------
+
+    def _vary_sentence_length(self, sentence):
+
+        words = sentence.split()
+
+        if len(words) > 25 and random.random() < 0.35:
+
+            split_point = random.randint(
+                10,
+                len(words) - 8
+            )
+
+            first = " ".join(
+                words[:split_point]
+            )
+
+            second = " ".join(
+                words[split_point:]
+            )
+
+            return first + ". " + second
+
+        return sentence
+
+    # ---------------------------------------------------
+    # PARAGRAPH RHYTHM
+    # ---------------------------------------------------
+
+    def _rebuild_paragraph(self, sentences):
+
+        paragraph = ""
+
+        for i, sent in enumerate(sentences):
+
+            paragraph += sent
+
+            if random.random() < 0.15:
+                paragraph += "  "
+            else:
+                paragraph += " "
+
+        return paragraph.strip()
+
+    # ---------------------------------------------------
+    # HUMAN RHYTHM ENGINE
+    # ---------------------------------------------------
+
+    def _inject_human_rhythm(self, text):
+
+        if random.random() < 0.1:
+
+            text += " "
+
+        if random.random() < 0.07:
+
+            text = text.replace(
+                ", however,",
+                " however,"
+            )
+
+        return text
+
+    # ---------------------------------------------------
+    # TRANSITIONS
+    # ---------------------------------------------------
+
+    def _inject_transition(self, text):
+
+        transition = random.choice(
+            self.casual_transitions
+        )
+
+        if text[0].isupper():
+
+            text = (
+                text[0].lower()
+                + text[1:]
+            )
+
         return f"{transition} {text}"
 
-    def _vary_punctuation(self, text: str) -> str:
-        # Occasionally replace period with an ellipsis or exclamation (very rare)
-        if text.endswith('.') and random.random() < 0.05:
-            return text[:-1] + "..."
-        if text.endswith('.') and random.random() < 0.02:
-            return text[:-1] + "!"
+    # ---------------------------------------------------
+    # PUNCTUATION
+    # ---------------------------------------------------
+
+    def _vary_punctuation(self, text):
+
+        if text.endswith("."):
+
+            r = random.random()
+
+            if r < 0.03:
+                return text[:-1] + "..."
+
+            if r < 0.05:
+                return text[:-1] + "."
+
         return text
 
-    def _add_inconsistencies(self, text: str) -> str:
-        # Double space after period occasionally
-        if random.random() < 0.3:
-            text = text.replace(". ", ".  ")
-        return text
+    # ---------------------------------------------------
+    # TOKEN RECONSTRUCTION
+    # ---------------------------------------------------
+
+    def _reconstruct(self, tokens):
+
+        text = ""
+
+        for token in tokens:
+
+            if re.match(r"[.,!?;:]", token):
+                text += token
+            else:
+                text += " " + token
+
+        return text.strip()

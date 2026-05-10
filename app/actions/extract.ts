@@ -11,7 +11,8 @@ export async function extractTextFromFile(formData: FormData): Promise<{ text: s
     }
 
     // Forward the file directly to the Python backend extraction service
-    const pyRes = await fetch("http://localhost:8000/extract", {
+    // Change to localhost:8000 if IPv4
+    const pyRes = await fetch("http://127.0.0.1:8000/extract", {
       method: "POST",
       body: formData,
     });
