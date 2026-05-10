@@ -130,10 +130,12 @@ function GaugeCard({ score }: { score: number }) {
             strokeLinecap="butt"
             strokeDasharray={`${humanDash} ${C}`}
             strokeDashoffset={0}
+            className="transition-all"
             style={{
               transform: `rotate(${aiAngle}deg)`,
               transformOrigin: "60px 60px",
-              transition: "stroke-dasharray 0.9s ease-in-out, transform 0.9s ease-in-out",
+              transitionDuration: "0.9s",
+              transitionTimingFunction: "ease-in-out",
             }}
           />
           <circle
@@ -142,7 +144,8 @@ function GaugeCard({ score }: { score: number }) {
             strokeLinecap="butt"
             strokeDasharray={`${aiDash} ${C}`}
             strokeDashoffset={0}
-            style={{ transition: "stroke-dasharray 0.9s ease-in-out" }}
+            className="transition-all" 
+            style={{ transitionDuration: "0.9s", transitionTimingFunction: "ease-in-out" }}
           />
         </svg>
         <div className="absolute flex flex-col items-center leading-none">
@@ -387,6 +390,7 @@ export function MainPanel({ apiKey, modelType }: { apiKey: string; modelType: st
               <button
                 onClick={() => setIsExplanationOpen(false)}
                 className="text-slate-400 hover:text-slate-700 transition-colors"
+                title="Close explanation"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -411,6 +415,7 @@ export function MainPanel({ apiKey, modelType }: { apiKey: string; modelType: st
             </span>
             <input
               type="file"
+              aria-label="Input File"
               accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               className="hidden"
               ref={fileInputRef}
@@ -543,6 +548,7 @@ export function MainPanel({ apiKey, modelType }: { apiKey: string; modelType: st
                 {!detectionResult ? (
                   <textarea
                     placeholder="Paste your text here or upload a document on the left to begin analysis..."
+                    title="Input text for analysis"
                     className="w-full h-full border-0 focus:outline-none resize-none p-5 text-sm font-sans text-slate-600 leading-relaxed bg-transparent"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
@@ -566,6 +572,8 @@ export function MainPanel({ apiKey, modelType }: { apiKey: string; modelType: st
                       ))
                     ) : (
                       <textarea
+                        placeholder="Paste your text here or upload a document on the left to begin analysis..."
+                        title="Input text for analysis"
                         className="w-full h-full border-0 focus:outline-none resize-none text-sm font-sans text-slate-600 leading-relaxed bg-transparent"
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}

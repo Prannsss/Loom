@@ -136,6 +136,7 @@ export default function Home() {
               <button 
                 onClick={() => setIsSidebarOpen(false)} 
                 className="text-slate-400 hover:text-slate-600 transition-colors"
+                title="Close settings"
               >
                 <X className="w-5 h-5" />
               </button>

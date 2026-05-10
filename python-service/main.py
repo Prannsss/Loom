@@ -5,10 +5,28 @@ import pdfplumber
 import docx
 import io
 import uvicorn
+from contextlib import asynccontextmanager
 from humanizer import Humanizer
 from detector import Detector
+import spacy
 
-app = FastAPI(title="Loom AI Python Backend")
+# Pre-warm spaCy model on startup
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Load and warm up the spaCy model
+    print("[Startup] Loading spaCy model...")
+    try:
+        nlp = spacy.load("en_core_web_sm")
+        # Process a test string to force model initialization
+        nlp("This is a test sentence to warm up the spaCy model.")
+        print("✓ spaCy model warmed and ready")
+    except OSError:
+        print("⚠ spaCy model not found. Install with: python -m spacy download en_core_web_sm")
+    yield
+    # Shutdown: cleanup if needed
+    print("[Shutdown] Loom AI Python Backend shutting down")
+
+app = FastAPI(title="Loom AI Python Backend", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,7 +59,7 @@ async def humanize_text(request: TextRequest):
     
     try:
         humanized = humanizer.process(request.text)
-        return {"originalText": request.text, "humanizedText": humanized}
+        return {"originalText": request.text, "python_humanized": humanized}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

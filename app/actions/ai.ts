@@ -1,13 +1,17 @@
 "use server";
 
 import { GoogleGenAI } from "@google/genai";
+import { getMaxInputChars } from "@/lib/models";
 
 // ---------------------------------------------------------------------------
 // CONSTANTS
 // ---------------------------------------------------------------------------
 
-/** Maximum characters sent to any LLM to avoid runaway token costs. */
-const MAX_INPUT_CHARS = 24_000;
+/** Python backend service URL (configurable via environment variable) */
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL ?? "http://127.0.0.1:8000";
+
+/** Conservative default maximum characters for models without explicit limits */
+const MAX_INPUT_CHARS_DEFAULT = 24_000;
 
 /**
  * Provider configuration table.
@@ -96,16 +100,12 @@ function resolveApiKey(customApiKey?: string): string {
 /**
  * Sanitizes a text string before sending it to an LLM:
  * - Strips null bytes and non-printable control characters (keeps \t \n \r)
- * - Truncates to MAX_INPUT_CHARS with a visible truncation notice
+ * - Returns the full text; chunking/truncation is handled by model-call functions
+ * @param text The input text to sanitize
  */
 function sanitizeInput(text: string): string {
   // eslint-disable-next-line no-control-regex
-  const cleaned = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  if (cleaned.length <= MAX_INPUT_CHARS) return cleaned;
-  return (
-    cleaned.slice(0, MAX_INPUT_CHARS) +
-    "\n\n[Note: input was truncated to fit the model's context window.]"
-  );
+  return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
 }
 
 /**
@@ -180,6 +180,29 @@ function extractJson(raw: string): unknown {
  */
 function isRetryable(status: number): boolean {
   return status === 429 || status === 503;
+}
+
+/**
+ * Generates a user-friendly error message for Python service errors.
+ */
+function getPythonServiceErrorMessage(error: any): string {
+  if (error instanceof Error) {
+    const msg = error.message;
+    if (msg.includes("fetch") || msg.includes("Connection")) {
+      return `Python service at ${PYTHON_SERVICE_URL} is not responding. Make sure the service is running on port 8000.`;
+    }
+    if (msg.includes("HTTP")) {
+      const statusMatch = msg.match(/HTTP (\d+)/);
+      if (statusMatch) {
+        const status = statusMatch[1];
+        if (status === "500") return "Python service encountered an error (HTTP 500). Check the Python service logs.";
+        if (status === "400") return "Python service rejected the request (HTTP 400). Input may be malformed.";
+      }
+      return `Python service error: ${msg}`;
+    }
+    return msg;
+  }
+  return "Python foundational layer is unavailable. Ensure it's running on port 8000.";
 }
 
 /**
@@ -337,6 +360,114 @@ async function callModel(
 }
 
 // ---------------------------------------------------------------------------
+// CHUNKING + AGGREGATION HELPERS
+// ---------------------------------------------------------------------------
+
+/** Split `text` into overlapping chunks sized to fit model input windows. */
+function splitIntoChunks(text: string, chunkSize: number, overlap = 500): string[] {
+  if (chunkSize <= 0) return [text];
+  const chunks: string[] = [];
+  let start = 0;
+  const len = text.length;
+  while (start < len) {
+    const end = Math.min(len, start + chunkSize);
+    chunks.push(text.slice(start, end));
+    if (end === len) break;
+    start = Math.max(0, end - overlap);
+  }
+  return chunks;
+}
+
+/** Build a safe chunk size reserving room for prompt overhead. */
+function computeChunkSizeForModel(modelName?: string): number {
+  const max = modelName ? getMaxInputChars(modelName) : MAX_INPUT_CHARS_DEFAULT;
+  const reserve = 4000; // conservative reserve for prompt text and JSON wrappers
+  const chunk = Math.max(1000, max - reserve);
+  return chunk;
+}
+
+/** Call `callModel` for each text chunk and aggregate semantic-detection results. */
+async function callModelInChunksDetect(
+  modelType: string,
+  apiKey: string,
+  fullText: string,
+  promptBuilder: (chunk: string) => string
+) {
+  const chunkSize = computeChunkSizeForModel(modelType);
+  const chunks = splitIntoChunks(fullText, chunkSize);
+
+  const partials: any[] = [];
+  for (const chunk of chunks) {
+    const prompt = promptBuilder(chunk);
+    const res = await callModel(modelType, apiKey, prompt);
+    if (res.error) return { error: res.error };
+    partials.push(res.result);
+  }
+
+  // Aggregate
+  let totalLen = 0;
+  let weightedSum = 0;
+  const indicatorsSet = new Set<string>();
+  const explanations: string[] = [];
+
+  for (let i = 0; i < partials.length; i++) {
+    const p = partials[i] as any;
+    const chunkLen = chunks[i].length;
+    totalLen += chunkLen;
+    const score = typeof p.score === "number" ? p.score : 0;
+    weightedSum += score * chunkLen;
+    if (Array.isArray(p.indicators)) {
+      for (const ind of p.indicators) {
+        if (typeof ind === "string") indicatorsSet.add(ind.trim());
+      }
+    }
+    if (typeof p.explanation === "string") explanations.push(p.explanation.trim());
+  }
+
+  const averaged = totalLen ? Math.round(weightedSum / totalLen) : 0;
+  return {
+    result: {
+      score: averaged,
+      isAI: averaged > 50,
+      indicators: Array.from(indicatorsSet),
+      explanation: explanations.join("\n\n---\n\n"),
+    },
+    error: null,
+  };
+}
+
+/** Call `callModel` for each text chunk and aggregate humanization outputs. */
+async function callModelInChunksHumanize(
+  modelType: string,
+  apiKey: string,
+  fullText: string,
+  promptBuilder: (chunk: string) => string
+) {
+  const chunkSize = computeChunkSizeForModel(modelType);
+  const chunks = splitIntoChunks(fullText, chunkSize);
+
+  const humanizedParts: string[] = [];
+  const summaries: string[] = [];
+
+  for (const chunk of chunks) {
+    const prompt = promptBuilder(chunk);
+    const res = await callModel(modelType, apiKey, prompt);
+    if (res.error) return { error: res.error };
+    const p = res.result as any;
+    if (typeof p.humanizedText === "string") humanizedParts.push(p.humanizedText.trim());
+    if (typeof p.summaryOfChanges === "string") summaries.push(p.summaryOfChanges.trim());
+  }
+
+  return {
+    result: {
+      humanizedText: humanizedParts.join("\n\n"),
+      summaryOfChanges: summaries.join("\n\n"),
+    },
+    error: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // DETECTION PIPELINE  (exported)
 // ---------------------------------------------------------------------------
 
@@ -346,16 +477,17 @@ async function callModel(
  */
 export async function pyDetectPreprocessing(text: string) {
   try {
-    const res = await fetchWithRetry("http://127.0.0.1:8000/detect", {
+    const res = await fetchWithRetry(`${PYTHON_SERVICE_URL}/detect`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: sanitizeInput(text) }),
     });
     if (res.ok) return await res.json();
-    throw new Error(`Python detect endpoint returned HTTP ${res.status}.`);
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Python detect endpoint returned HTTP ${res.status}: ${errText}`);
   } catch (e: any) {
     console.error("[pyDetectPreprocessing]", e);
-    return { error: e.message ?? "Python foundational layer is unavailable." };
+    return { error: getPythonServiceErrorMessage(e) };
   }
 }
 
@@ -371,8 +503,9 @@ export async function llmDetectSemantic(
   try {
     const apiKey = resolveApiKey(customApiKey);
     const safeText = sanitizeInput(filteredText);
+    const maxChars = getMaxInputChars(modelType);
 
-    const prompt = `Analyze the following text and determine whether it was likely generated by an AI or written by a human.
+    const promptBuilder = (chunk: string) => `Analyze the following text and determine whether it was likely generated by an AI or written by a human.
 Examine patterns such as: repetition, predictable phrasing, overly uniform tone, lack of natural variation, and rigid structural consistency.
 
 Return ONLY a JSON object with this exact structure (no markdown, no preamble):
@@ -384,9 +517,19 @@ Return ONLY a JSON object with this exact structure (no markdown, no preamble):
 }
 
 Text to analyze:
-${safeText}`;
+${chunk}`;
 
-    const res = await callModel(modelType, apiKey, prompt);
+    let res: ModelCallResult | { result: unknown; error: string };
+
+    // Auto-chunk if text exceeds model limits
+    if (safeText.length > maxChars) {
+      const chunked = await callModelInChunksDetect(modelType, apiKey, safeText, promptBuilder);
+      if (chunked.error) return { error: chunked.error };
+      res = { result: chunked.result, error: null };
+    } else {
+      const prompt = promptBuilder(safeText);
+      res = await callModel(modelType, apiKey, prompt);
+    }
 
     if (res.result) {
       const r = res.result as any;
@@ -421,7 +564,7 @@ export async function fuseDetection(
   const baseFragments: Fragment[] =
     pyData.fragments?.length
       ? pyData.fragments
-      : [{ text, score: pyData.score, isAI: (pyData.score ?? 0) > 50 }];
+      : [{ text, score: pyData.score, isAI: (pyData.score ?? 0) > 45 }];  // Lowered threshold from 50 to 45
 
   const finalResult = {
     score: 0,
@@ -435,7 +578,7 @@ export async function fuseDetection(
     // Weighted blend: Python heuristics 70%, LLM semantics 30%
     const blended = Math.round((pyData.score ?? 0) * 0.7 + (llmResult.score ?? 0) * 0.3);
     finalResult.score = blended;
-    finalResult.isAI = blended > 50;
+    finalResult.isAI = blended > 45;  // Lowered threshold from 50 to 45 for stricter detection
 
     // Nudge ambiguous fragments using the LLM's document-level verdict
     const llmSaysAI = (llmResult.score ?? 0) > 50;
@@ -446,7 +589,7 @@ export async function fuseDetection(
       const nudged = llmSaysAI
         ? Math.min(100, f.score + 10)
         : Math.max(0, f.score - 10);
-      return { ...f, score: nudged, isAI: nudged > 50 };
+      return { ...f, score: nudged, isAI: nudged > 45 };  // Lowered threshold from 50 to 45
     });
 
     // Deduplicate indicators (case-insensitive)
@@ -467,7 +610,7 @@ export async function fuseDetection(
       `AI Semantic Reasoning: ${stripMarkdown(llmResult.explanation ?? "Analyzed successfully.")}`;
   } else {
     finalResult.score = pyData.score ?? 0;
-    finalResult.isAI = (pyData.score ?? 0) > 50;
+    finalResult.isAI = (pyData.score ?? 0) > 45;  // Lowered threshold from 50 to 45 for stricter detection
     finalResult.explanation =
       `${pipelineLog}\n\n` +
       "[Python Only Output] Evaluated using deterministic statistical heuristics: " +
@@ -500,16 +643,17 @@ export async function fuseDetection(
  */
 export async function pyHumanizeLayer(text: string) {
   try {
-    const res = await fetchWithRetry("http://127.0.0.1:8000/pipeline/humanize", {
+    const res = await fetchWithRetry(`${PYTHON_SERVICE_URL}/humanize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: sanitizeInput(text) }),
     });
     if (res.ok) return await res.json();
-    throw new Error(`Python humanization returned HTTP ${res.status}.`);
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Python humanization returned HTTP ${res.status}: ${errText}`);
   } catch (e: any) {
     console.error("[pyHumanizeLayer]", e);
-    return { error: e.message ?? "Python foundational layer is unavailable." };
+    return { error: getPythonServiceErrorMessage(e) };
   }
 }
 
@@ -529,8 +673,9 @@ export async function llmHumanize(
     const apiKey = resolveApiKey(customApiKey);
     const safeText = sanitizeInput(pythonHumanizedText);
     const toneInstruction = TONE_INSTRUCTIONS[tone] ?? `\nThe desired output tone is: ${tone}`;
+    const maxChars = getMaxInputChars(modelType);
 
-    const prompt =
+    const promptBuilder = (chunk: string) =>
       `You are an expert semantic enhancement layer in a hybrid humanization pipeline. ` +
       `The text has already been deterministically humanized. Your job is to improve the formatting, structuring, and flow.\n` +
       `Strictly preserve the original meaning, intent, and factual accuracy.\n` +
@@ -547,9 +692,19 @@ export async function llmHumanize(
       `  "humanizedText": "<rewritten plain text>",\n` +
       `  "summaryOfChanges": "<brief plain-text explanation of changes>"\n` +
       `}\n` +
-      `\nText to rewrite:\n${safeText}`;
+      `\nText to rewrite:\n${chunk}`;
 
-    const res = await callModel(modelType, apiKey, prompt);
+    let res: ModelCallResult | { result: unknown; error: string };
+
+    // Auto-chunk if text exceeds model limits
+    if (safeText.length > maxChars) {
+      const chunked = await callModelInChunksHumanize(modelType, apiKey, safeText, promptBuilder);
+      if (chunked.error) return { error: chunked.error };
+      res = { result: chunked.result, error: null };
+    } else {
+      const prompt = promptBuilder(safeText);
+      res = await callModel(modelType, apiKey, prompt);
+    }
 
     if (res.result) {
       const r = res.result as any;

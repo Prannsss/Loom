@@ -17,27 +17,27 @@ class Detector:
         # ---------------------------------------------------
         self.thresholds = {
             # Ratio of AI-marker words to total words
-            "marker_density": 0.01,
+            "marker_density": 0.005,  # Lowered from 0.01 — stricter
             # Coefficient of variation for sentence length (low = uniform = AI-like)
             "cv_burstiness": 0.35,
             # Type-token ratio (low = repetitive = AI-like)
-            "lexical_diversity": 0.42,
+            "lexical_diversity": 0.35,  # Lowered from 0.42 — stricter
             # Single-token repetition ratio
-            "repetition_score": 0.12,
+            "repetition_score": 0.08,  # Lowered from 0.12 — stricter
             # Shannon entropy of vocabulary (low = AI-like)
-            "entropy": 6.0,
+            "entropy": 5.5,  # Lowered from 6.0 — stricter
             # Ratio of passive sentences
-            "passive_voice": 0.35,
+            "passive_voice": 0.25,  # Lowered from 0.35 — stricter
             # Ratio of sentences starting with a formal transition
-            "transition_ratio": 0.15,
+            "transition_ratio": 0.12,  # Lowered from 0.15 — stricter
             # Average sentence word count (high = verbose = AI-like)
-            "avg_sentence_len": 24,
+            "avg_sentence_len": 20,  # Lowered from 24 — stricter
             # Variance of per-sentence TextBlob polarity (low = flat = AI-like)
-            "sentiment_variance": 0.02,
+            "sentiment_variance": 0.015,  # Lowered from 0.02 — stricter
             # Minimum words required for a reliable analysis
             "min_words": 50,
             # Per-sentence score above which a sentence is flagged AI
-            "sentence_ai_threshold": 50,
+            "sentence_ai_threshold": 45,  # Lowered from 50 — stricter
         }
 
         # ---------------------------------------------------
@@ -435,8 +435,8 @@ class Detector:
         marker_density = self._weighted_marker_density(words, filtered_text)
 
         if marker_density > self.thresholds["marker_density"]:
-            # Scale: 20 pts at threshold, up to 20 pts for anything above
-            pts = min(20, int(20 * (marker_density / self.thresholds["marker_density"]) ** 0.5))
+            # Scale: 30 pts at threshold, up to 30 pts for anything above
+            pts = min(30, int(30 * (marker_density / self.thresholds["marker_density"]) ** 0.5))
             score += pts
             indicators.append(
                 f"High AI-associated vocabulary density (weighted density: {marker_density:.4f})."
@@ -451,8 +451,8 @@ class Detector:
             burst = self.burstiness(sentence_lengths)
             # burst < 0 means uniform; very negative = very uniform = very AI-like
             if burst < 0:
-                # Map [-1, 0] → [20, 0] pts
-                pts = min(20, int(20 * abs(burst)))
+                # Map [-1, 0] → [25, 0] pts
+                pts = min(25, int(25 * abs(burst)))
                 score += pts
                 indicators.append(
                     f"Low sentence burstiness (burstiness={burst:.3f}; negative = uniform)."
@@ -464,7 +464,7 @@ class Detector:
         diversity = self.lexical_diversity(words)
 
         if diversity < self.thresholds["lexical_diversity"]:
-            score += 15
+            score += 20  # Increased from 15
             indicators.append(
                 f"Low lexical diversity (TTR={diversity:.3f})."
             )
@@ -508,7 +508,7 @@ class Detector:
         passive_ratio = self.passive_voice_ratio(doc)
 
         if passive_ratio > self.thresholds["passive_voice"]:
-            score += 10
+            score += 15  # Increased from 10
             indicators.append(
                 f"Excessive passive voice usage (ratio={passive_ratio:.3f})."
             )
@@ -545,13 +545,13 @@ class Detector:
             )
 
         # --------------------------------------------------
-        # 10. SENTIMENT VARIANCE  (max +10)
+        # 10. SENTIMENT VARIANCE  (max +15)
         # Low variance = emotionally flat = AI-like
         # --------------------------------------------------
         sent_variance = self.sentiment_variance(sentences)
 
         if sent_variance < self.thresholds["sentiment_variance"]:
-            score += 10
+            score += 15  # Increased from 10
             indicators.append(
                 f"Very low sentiment variance ({sent_variance:.4f}); text is emotionally flat."
             )

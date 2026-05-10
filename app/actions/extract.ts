@@ -3,6 +3,9 @@
 import pdfParse from "pdf-parse";
 import mammoth from "mammoth";
 
+/** Python backend service URL (configurable via environment variable) */
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL ?? "http://127.0.0.1:8000";
+
 export async function extractTextFromFile(formData: FormData): Promise<{ text: string; error?: string }> {
   try {
     const file = formData.get("file") as File;
@@ -11,8 +14,7 @@ export async function extractTextFromFile(formData: FormData): Promise<{ text: s
     }
 
     // Forward the file directly to the Python backend extraction service
-    // Change to localhost:8000 if IPv4
-    const pyRes = await fetch("http://127.0.0.1:8000/extract", {
+    const pyRes = await fetch(`${PYTHON_SERVICE_URL}/extract`, {
       method: "POST",
       body: formData,
     });
