@@ -1,0 +1,6 @@
+{
+  "name": "AI Text Humanizer Pro",
+  "description": "An AI system that functions as both an AI text detector and a humanization engine, extracting text from multiple formats, evaluating AI generation likelihood, and rewriting text to be more natural.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
