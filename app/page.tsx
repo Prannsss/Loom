@@ -2,7 +2,67 @@
 
 import { useState, useEffect } from "react";
 import { MainPanel } from "@/components/main-panel";
-import { Settings, X, Key, Eye, EyeOff, Bot } from "lucide-react";
+import { Settings, X, Key, Eye, EyeOff, Bot, ExternalLink } from "lucide-react";
+
+type ModelOption = {
+  value: string;
+  label: string;
+  model: string;
+  tier: "free" | "paid";
+  keyUrl: string;
+  hint: string;
+};
+
+const MODEL_OPTIONS: ModelOption[] = [
+  {
+    value: "gemini",
+    label: "Google Gemini",
+    model: "gemini-2.5-flash",
+    tier: "free",
+    keyUrl: "https://aistudio.google.com/apikey",
+    hint: "Get a free API key from Google AI Studio.",
+  },
+  {
+    value: "claude",
+    label: "Anthropic Claude",
+    model: "claude-sonnet-4-6",
+    tier: "paid",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+    hint: "Requires a paid Anthropic account.",
+  },
+  {
+    value: "openai",
+    label: "OpenAI",
+    model: "gpt-4.1",
+    tier: "paid",
+    keyUrl: "https://platform.openai.com/api-keys",
+    hint: "Requires an OpenAI account with billing enabled.",
+  },
+  {
+    value: "deepseek",
+    label: "DeepSeek",
+    model: "deepseek-v4-flash",
+    tier: "paid",
+    keyUrl: "https://platform.deepseek.com/api_keys",
+    hint: "Very low-cost paid API. Get a key from DeepSeek Platform.",
+  },
+  {
+    value: "minimax",
+    label: "MiniMax",
+    model: "MiniMax-M2.5",
+    tier: "paid",
+    keyUrl: "https://www.minimax.io/platform",
+    hint: "Get an API key from MiniMax Platform.",
+  },
+  {
+    value: "glm",
+    label: "Zhipu AI (GLM)",
+    model: "glm-5",
+    tier: "paid",
+    keyUrl: "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys",
+    hint: "Get an API key from Zhipu AI Open Platform.",
+  },
+];
 
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
@@ -38,8 +98,8 @@ export default function Home() {
       {/* Header Navigation */}
       <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold">L</div>
-          <h1 className="text-lg font-semibold tracking-tight">LOOM AI <span className="text-slate-400 font-normal">| TEXT ANALYTICS</span></h1>
+          <img src="/favicon.ico" alt="Loom Logo" className="w-8 h-8 rounded" />
+          <h1 className="text-lg font-semibold tracking-tight">LOOM AI <span className="text-slate-400 font-normal">| TEXT ANALYSIS</span></h1>
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
@@ -60,7 +120,7 @@ export default function Home() {
       </header>
 
       {/* Main Workspace */}
-      <main className="flex-grow flex p-6 gap-6 overflow-hidden">
+      <main className="h-[calc(100vh-4rem)] flex p-5 gap-5 overflow-hidden">
         <MainPanel apiKey={apiKey} modelType={selectedModel} />
       </main>
 
@@ -86,45 +146,80 @@ export default function Home() {
                   <Bot className="w-3 h-3" />
                   AI Model Provider
                 </label>
-                <select
-                  value={tempModel}
-                  onChange={(e) => setTempModel(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                >
-                  <option value="gemini">Gemini</option>
-                  <option value="claude">Claude</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="deepseek">Deepseek</option>
-                  <option value="minimax">Minimax</option>
-                  <option value="glm">GLM</option>
-                </select>
+                <div className="flex flex-col gap-2">
+                  {MODEL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setTempModel(opt.value)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                        tempModel === opt.value
+                          ? "border-indigo-400 bg-indigo-50 ring-1 ring-indigo-400"
+                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`text-xs font-semibold ${
+                          tempModel === opt.value ? "text-indigo-700" : "text-slate-700"
+                        }`}>{opt.label}</span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                          opt.tier === "free"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}>
+                          {opt.tier === "free" ? "FREE" : "PAID"}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">{opt.model}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <Key className="w-3 h-3" />
-                  Provider API Key
-                </label>
-                <div className="relative">
-                  <input 
-                    type={showApiKey ? "text" : "password"} 
-                    value={tempKey}
-                    onChange={(e) => setTempKey(e.target.value)}
-                    placeholder="Enter API key..."
-                    className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <p className="text-[11px] text-slate-500 leading-relaxed mt-1">
-                  Required to connect to the selected AI model. Your key is stored securely in your browser's local storage.
-                </p>
-              </div>
+              {(() => {
+                const selectedOpt = MODEL_OPTIONS.find((o) => o.value === tempModel);
+                return (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                      <Key className="w-3 h-3" />
+                      API Key
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showApiKey ? "text" : "password"}
+                        value={tempKey}
+                        onChange={(e) => setTempKey(e.target.value)}
+                        placeholder={`Enter ${selectedOpt?.label ?? ""} API key...`}
+                        className="w-full pl-3 pr-10 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {selectedOpt && (
+                      <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 flex flex-col gap-1.5">
+                        <p className="text-[11px] text-slate-600 leading-relaxed">
+                          {selectedOpt.hint}
+                        </p>
+                        <a
+                          href={selectedOpt.keyUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                        >
+                          Get API Key <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      Your key is stored locally in your browser only.
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="p-6 border-t shrink-0">
               <button 

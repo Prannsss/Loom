@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import * as Diff from "diff";
+import { Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DiffViewerProps {
@@ -10,6 +11,14 @@ interface DiffViewerProps {
 }
 
 export function DiffViewer({ original, modified }: DiffViewerProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(modified);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const diffResult = useMemo(() => {
     return Diff.diffWordsWithSpace(original, modified);
   }, [original, modified]);
@@ -45,7 +54,20 @@ export function DiffViewer({ original, modified }: DiffViewerProps) {
       <div className="bg-white flex flex-col p-6 max-h-[500px] overflow-y-auto">
         <div className="flex justify-between items-center mb-4 sticky top-0 bg-white/90 pb-2 z-10">
           <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Humanized Version</span>
-          <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded">{wordCountModified} Words</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded">{wordCountModified} Words</span>
+            <button
+              onClick={handleCopy}
+              title="Copy humanized text"
+              className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded transition-colors
+                bg-indigo-50 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700"
+            >
+              {copied
+                ? <><Check className="w-3 h-3" /> Copied!</>
+                : <><Copy className="w-3 h-3" /> Copy</>
+              }
+            </button>
+          </div>
         </div>
         <div className="text-sm text-slate-800 font-medium leading-relaxed font-sans whitespace-pre-wrap">
           {diffResult.map((part, index) => {
