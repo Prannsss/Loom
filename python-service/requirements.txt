@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+spacy
+nltk
+textblob
+pyinflect
+language-tool-python
+pdfplumber
+python-docx
+python-multipart
+httpx

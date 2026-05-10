@@ -361,7 +361,27 @@ ${text}`;
 
   // Post-process: strip any residual markdown the model may have included despite instructions.
   if (res.result?.humanizedText) {
-    res.result.humanizedText = stripMarkdown(res.result.humanizedText);
+    let textToProcess = stripMarkdown(res.result.humanizedText);
+    
+    // Pass to Python NLP Service for final rhythm/burstiness/grammar processing
+    try {
+      const pyRes = await fetch("http://localhost:8000/humanize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textToProcess })
+      });
+      
+      if (pyRes.ok) {
+        const pyData = await pyRes.json();
+        textToProcess = pyData.humanizedText || textToProcess;
+      } else {
+        console.warn("Python humanization service returned error status", pyRes.status);
+      }
+    } catch (e) {
+      console.error("Failed to reach Python humanization service. Is it running on port 8000?", e);
+    }
+    
+    res.result.humanizedText = textToProcess;
   }
 
   return res;

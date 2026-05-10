@@ -10,23 +10,22 @@ export async function extractTextFromFile(formData: FormData): Promise<{ text: s
       return { text: "", error: "No file provided" };
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Forward the file directly to the Python backend extraction service
+    const pyRes = await fetch("http://localhost:8000/extract", {
+      method: "POST",
+      body: formData,
+    });
 
-    if (file.type === "application/pdf") {
-      const data = await pdfParse(buffer);
-      return { text: data.text || "" };
-    } else if (
-      file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      file.name.endsWith(".docx")
-    ) {
-      const result = await mammoth.extractRawText({ buffer });
-      return { text: result.value || "" };
-    } else {
-      return { text: "", error: "Unsupported file type. Please upload a PDF or DOCX file." };
+    if (!pyRes.ok) {
+      const errText = await pyRes.text();
+      throw new Error(`Python extraction service error: ${errText}`);
     }
+
+    const data = await pyRes.json();
+    return { text: data.text || "" };
+
   } catch (error: any) {
     console.error("Error extracting text:", error);
-    return { text: "", error: error.message || "Failed to extract text from the document." };
+    return { text: "", error: "Failed to extract text from the document. Ensure Python service is running on port 8000." };
   }
 }
