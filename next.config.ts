@@ -1,28 +1,25 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   experimental: {
     serverActions: {
-      bodySizeLimit: '20mb',
+      bodySizeLimit: "4mb", // Vercel functions accept at most 4.5 MB; files are parsed in the browser
     },
   },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-      },
-    ],
+  transpilePackages: ["motion"],
+  webpack: (config) => {
+    // transformers.js runs in the browser only; keep its Node backends out of the bundle.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      sharp$: false,
+      "onnxruntime-node$": false,
+    };
+    return config;
   },
-  output: 'standalone',
-  transpilePackages: ['motion'],
 };
 
 export default nextConfig;

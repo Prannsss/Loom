@@ -27,10 +27,10 @@ export function DiffViewer({ original, modified }: DiffViewerProps) {
   const wordCountModified = modified.split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-[1px] bg-slate-200 border border-slate-200 rounded-xl overflow-hidden shadow-sm shadow-indigo-100/20">
+    <div className="flex-grow grid grid-cols-1 md:grid-cols-2 gap-[1px] bg-slate-200 shadow-sm shadow-indigo-100/20">
       
       {/* Left side: Original */}
-      <div className="bg-white flex flex-col p-6 max-h-[500px] overflow-y-auto">
+      <div className="bg-white flex flex-col p-6">
         <div className="flex justify-between items-center mb-4 sticky top-0 bg-white/90 pb-2 z-10">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Original Input</span>
           <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-500 rounded">{wordCountOriginal} Words</span>
@@ -51,7 +51,7 @@ export function DiffViewer({ original, modified }: DiffViewerProps) {
       </div>
 
       {/* Right side: Humanized */}
-      <div className="bg-white flex flex-col p-6 max-h-[500px] overflow-y-auto">
+      <div className="bg-white flex flex-col p-6">
         <div className="flex justify-between items-center mb-4 sticky top-0 bg-white/90 pb-2 z-10">
           <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Humanized Version</span>
           <div className="flex items-center gap-3">

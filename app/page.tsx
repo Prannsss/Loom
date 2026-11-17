@@ -25,7 +25,7 @@ const MODEL_OPTIONS: ModelOption[] = [
   {
     value: "claude",
     label: "Anthropic Claude",
-    model: "claude-sonnet-4-6",
+    model: "claude-opus-5-5",
     tier: "paid",
     keyUrl: "https://console.anthropic.com/settings/keys",
     hint: "Requires a paid Anthropic account.",
@@ -104,7 +104,7 @@ export default function Home() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-            PDF / DOCX SUPPORTED
+            PDF · DOCX · TXT
           </div>
           <button 
             onClick={() => {

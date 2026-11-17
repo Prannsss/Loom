@@ -1,95 +1,54 @@
 # Loom AI Text Analysis
 
-Loom AI is an advanced text detection and humanization platform. It is designed to analyze documents or raw text to determine the statistical likelihood of artificial intelligence authorship and provides a sophisticated hybrid pipeline to rewrite ("humanize") AI-generated content into natural, human-like prose.
+Loom checks documents for AI-generated writing and rewrites flagged passages so they read like a person wrote them.
 
-## Core Features
+Upload a PDF, DOCX or TXT (or paste text). Loom reports **what share of the text appears AI-generated**, highlights the paragraphs responsible, and explains each flag.
 
-- **AI Detection and Confidence Scoring**
-  Analyzes input text against language models to evaluate structural uniformity, repetitive patterns, and deterministic phrasing. The results are presented through a dual-arc gauge showing exact percentage likelihoods for AI versus Human authorship.
+## How detection works
 
-- **Hybrid Humanization Pipeline**
-  To rewrite text naturally without triggering "anti-AI" heuristics, the system uses a two-stage process:
-  1.  **Semantic Rewrite (LLM Layer):** A configurable AI provider restructures the text strictly preserving meaning and intent based on the desired tone.
-  2.  **Structural Manipulation (Python NLP Layer):** The text is passed through a deterministic Python backend powered by spaCy and NLTK. This layer introduces natural text burstiness, rhythm variations, contextual contractions, transition injections, and subtle human-like typing inconsistencies.
+Grammarly's detector is proprietary, so Loom does not copy it. Loom follows the same approach commercial detectors describe publicly: a trained classifier scores each passage, and the results roll up into "N% of the text appears AI-generated". Three signals are combined per paragraph:
 
-- **Diff Viewer and Refinement**
-  The user interface features a side-by-side difference viewer to compare original and humanized texts. Users can supply subsequent refinement notes to continuously adjust the output tone.
+1. **Transformer classifier (in your browser).** [TMR AI text detector](https://huggingface.co/Oxidane/tmr-ai-text-detector), a RoBERTa-base model fine-tuned on the RAID benchmark (reported AUROC 99.28%, MIT license). It runs on-device via transformers.js in a Web Worker. The ~126 MB quantised model downloads once and is then cached by the browser. No text leaves your machine for this step.
+2. **AI-writing patterns.** 25 pattern families from the [humanizer skill](https://github.com/blader/humanizer) (based on Wikipedia's *Signs of AI writing*): "not X but Y" contrasts, one-line closers, inflated significance, stock AI vocabulary, tacked-on "-ing" phrases, chatbot residue, dash overuse, and more. Matches are underlined in the document.
+3. **Optional LLM second opinion.** If you add an API key in Settings, the selected model scores each paragraph and gives a short reason.
 
-- **Multi-Provider AI Support**
-  Supports various advanced language models for semantic processing, including Gemini (with built-in fallback cascades), Claude, OpenAI GPT models, DeepSeek, MiniMax, and GLM. Keys can be managed locally via the application settings.
+Signals are fused in log-odds space (`lib/detect/engine.ts`). A classifier hit with no supporting evidence is shown as **Possibly AI** rather than flagged, because the classifier also fires on formal human prose (academic papers, encyclopedic text). Headings, captions, tables, page numbers, running headers and the reference list are excluded before scoring.
 
-- **Document Extraction**
-  Users can upload PDF and DOCX files. The extraction is handled robustly by the Python backend utilizing `pdfplumber` and `python-docx` to preserve formatting for analysis.
+**Limits.** No detector proves authorship. Formal academic writing and non-native English can score high, and lightly edited AI text can score low. The fusion weights were hand-tuned on a small labelled set, so treat scores as one piece of evidence, not a verdict.
 
-## Technology Stack
+## Humanizer
 
-- **Frontend:** Next.js (App Router), React, Tailwind CSS
-- **Backend (Node):** Next.js Server Actions for UI orchestration and LLM communication
-- **Backend (Python):** FastAPI service for document parsing and NLP transformations
-- **NLP Libraries:** spaCy, NLTK (WordNet), TextBlob, pyinflect
+Rewrites follow the [humanizer skill](https://github.com/blader/humanizer) (MIT), embedded verbatim in `lib/humanize/skill-text.ts`. The model marks the tells, drafts, checks that no fact, number or citation was lost, then returns the final text. Only flagged paragraphs are rewritten by default; headings and references are never touched. You can choose a tone, paste a sample of your own writing to match its voice, and refine with notes. After rewriting, Loom re-scans and shows the before/after AI share.
 
----
+Without an API key, Loom applies only the mechanical rules (dashes, stock openers, chatbot residue, "serves as" → "is").
 
-## Local Environment Setup
+## Supported providers
 
-Running Loom AI requires running both the Next.js frontend server and the Python FastAPI backend service concurrently.
+Claude (`claude-opus-5-5`, via the official Anthropic SDK), Gemini, OpenAI, DeepSeek, MiniMax, GLM. Keys are stored in your browser's `localStorage` and sent only to the server action that calls the provider.
 
-### Prerequisites
+## Running locally
 
-- Node.js (v18 or higher)
-- Python (3.9 or higher)
-- Git
+Requires Node.js 18+.
 
-### 1. Frontend Setup (Next.js)
+```bash
+npm install
+npm run dev
+```
 
-1.  Navigate to the root directory of the project.
-2.  Install the Node.js dependencies:
-    ```bash
-    npm install
-    ```
-3.  Start the Next.js development server:
-    ```bash
-    npm run dev
-    ```
-    The frontend will be available at `http://localhost:3000`.
+Open http://localhost:3000. No Python service is needed. `python-service/` is the previous spaCy backend; the app no longer calls it.
 
-### 2. Backend Setup (Python NLP Service)
+## Deploying to Vercel
 
-The Python service handles document parsing and deterministic NLP humanization. It must be running on port 8000 for the frontend to function correctly.
+Import the repository in Vercel and deploy with the defaults (framework: Next.js). No environment variables are required. Files are parsed in the browser, so large PDFs are not limited by Vercel's 4.5 MB request-body limit.
 
-1.  Navigate to the Python service directory:
-    ```bash
-    cd python-service
-    ```
-2.  (Optional but recommended) Create and activate a virtual environment:
-    **Windows:**
-    ```bash
-    python -m venv venv
-    venv\Scripts\activate
-    ```
-    **macOS/Linux:**
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
-3.  Install the required Python packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
-4.  Download the required spaCy language model:
-    ```bash
-    python -m spacy download en_core_web_sm
-    ```
-    _Note: NLTK corpora (such as WordNet) will automatically download upon starting the server for the first time._
-5.  Start the FastAPI server:
-    ```bash
-    python main.py
-    ```
-    The backend service will start at `http://localhost:8000`.
+## Project layout
 
-### 3. Application Configuration
-
-1.  Open your browser and navigate to `http://localhost:3000`.
-2.  Click the Settings icon in the header to open the configuration sidebar.
-3.  Select your preferred AI provider (e.g., Gemini, Claude) and input your corresponding API key. These keys are stored securely in your browser's `localStorage`.
-4.  You are now ready to upload documents or paste text to begin analysis and humanization.
+| Path | Purpose |
+| --- | --- |
+| `lib/extract.ts` | PDF (unpdf, layout-aware paragraph rebuild) and DOCX (mammoth) extraction in the browser |
+| `lib/detect/engine.ts` | Segmentation, stylometry, fusion, document report |
+| `lib/detect/patterns.ts` | AI-writing pattern catalog |
+| `lib/detect/classifier*.ts` | transformers.js classifier in a Web Worker |
+| `lib/humanize/` | Humanizer skill text and mechanical cleanup |
+| `app/actions/ai.ts` | LLM server actions (paragraph scoring, humanizing) |
+| `components/main-panel.tsx` | UI |
