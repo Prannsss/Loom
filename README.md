@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. No Python service is needed. `python-service/` is the previous spaCy backend; the app no longer calls it.
+Open http://localhost:3000. No Python service is needed.
 
 ## Deploying to Vercel
 
